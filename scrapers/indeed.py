@@ -34,8 +34,8 @@ def _get_cloudflare_cookies() -> tuple[dict, str]:
     try:
         resp = std_requests.post(
             _FLARESOLVERR_URL,
-            json={"cmd": "request.get", "url": _INDEED_HOME, "maxTimeout": 60000},
-            timeout=70,
+            json={"cmd": "request.get", "url": _INDEED_HOME, "maxTimeout": 120000},
+            timeout=150,
         )
     except std_requests.exceptions.ConnectionError:
         raise Exception(
