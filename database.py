@@ -211,22 +211,37 @@ def upsert_listing(data: dict) -> tuple[dict, bool]:
             )
             row = conn.execute("SELECT * FROM listings WHERE id=?", (existing["id"],)).fetchone()
             return dict(row), False
-        else:
-            lid = str(uuid.uuid4())
-            conn.execute(
-                """INSERT INTO listings
-                   (id, external_id, site_id, profile_id, title, company, contract_type,
-                    location, remote, salary, url, description, pub_date,
-                    first_detected, last_detected, status, notes)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new','')""",
-                (lid, data.get("external_id"), data["site_id"], data["profile_id"],
-                 data.get("title"), data.get("company"), data.get("contract_type"),
-                 data.get("location"), data.get("remote"), data.get("salary"),
-                 data.get("url"), data.get("description"), data.get("pub_date"),
-                 now, now)
-            )
-            row = conn.execute("SELECT * FROM listings WHERE id=?", (lid,)).fetchone()
-            return dict(row), True
+
+        # Soft-dedup : même titre + entreprise + localisation → même offre republiée
+        if data.get("title") and data.get("company"):
+            duplicate = conn.execute(
+                """SELECT * FROM listings
+                   WHERE title=? AND company=? AND location=? AND site_id=? AND profile_id=?""",
+                (data["title"], data["company"], data.get("location", ""),
+                 data["site_id"], data["profile_id"])
+            ).fetchone()
+            if duplicate:
+                conn.execute(
+                    "UPDATE listings SET last_detected=?, external_id=? WHERE id=?",
+                    (now, data["external_id"], duplicate["id"])
+                )
+                return dict(duplicate), False
+
+        lid = str(uuid.uuid4())
+        conn.execute(
+            """INSERT INTO listings
+               (id, external_id, site_id, profile_id, title, company, contract_type,
+                location, remote, salary, url, description, pub_date,
+                first_detected, last_detected, status, notes)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new','')""",
+            (lid, data.get("external_id"), data["site_id"], data["profile_id"],
+             data.get("title"), data.get("company"), data.get("contract_type"),
+             data.get("location"), data.get("remote"), data.get("salary"),
+             data.get("url"), data.get("description"), data.get("pub_date"),
+             now, now)
+        )
+        row = conn.execute("SELECT * FROM listings WHERE id=?", (lid,)).fetchone()
+        return dict(row), True
 
 
 def list_listings(profile_id=None, site_id=None, status=None,
