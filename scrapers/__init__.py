@@ -2,12 +2,14 @@ from .francetravail import FranceTravailScraper
 from .indeed import IndeedScraper
 from .apec import ApecScraper
 from .wttj import WttjScraper
+from .linkedin import LinkedInScraper
 
 SCRAPERS_BY_NAME = {
     "france travail":        FranceTravailScraper,
     "indeed":                IndeedScraper,
     "apec":                  ApecScraper,
     "welcome to the jungle": WttjScraper,
+    "linkedin":              LinkedInScraper,
 }
 
 
