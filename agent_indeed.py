@@ -27,9 +27,9 @@ def main():
     profiles = requests.get(f"{base}/api/profiles").json()
     sites    = requests.get(f"{base}/api/sites").json()
 
-    indeed_site = next((s for s in sites if s["name"].lower() == "indeed" and s["active"]), None)
+    indeed_site = next((s for s in sites if s["name"].lower() == "indeed"), None)
     if not indeed_site:
-        logger.error("Site Indeed introuvable ou inactif sur le serveur.")
+        logger.error("Site Indeed introuvable sur le serveur.")
         sys.exit(1)
 
     if args.profile:
