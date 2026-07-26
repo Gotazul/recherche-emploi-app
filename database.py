@@ -316,6 +316,35 @@ def get_listings_by_ids(ids: list[str]) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_active_listings_not_in(profile_id: str, site_id: str, seen_external_ids: list[str]) -> list[dict]:
+    """Retourne les annonces actives (non gone/dismissed) absentes du dernier scrape."""
+    with get_db() as conn:
+        if not seen_external_ids:
+            return []
+        placeholders = ",".join("?" * len(seen_external_ids))
+        rows = conn.execute(f"""
+            SELECT external_id, url FROM listings
+            WHERE profile_id=? AND site_id=? AND url != ''
+            AND status NOT IN ('gone','dismissed','interesting','applied')
+            AND external_id NOT IN ({placeholders})
+        """, [profile_id, site_id] + seen_external_ids).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_gone_by_ids(profile_id: str, site_id: str, external_ids: list[str]):
+    """Marque 'gone' une liste précise d'annonces (vérifiées mortes via URL)."""
+    if not external_ids:
+        return
+    with get_db() as conn:
+        placeholders = ",".join("?" * len(external_ids))
+        conn.execute(f"""
+            UPDATE listings SET status='gone'
+            WHERE profile_id=? AND site_id=?
+            AND status NOT IN ('dismissed','interesting','applied')
+            AND external_id IN ({placeholders})
+        """, [profile_id, site_id] + external_ids)
+
+
 def mark_gone_if_not_seen(profile_id: str, site_id: str, seen_external_ids: list[str], days_threshold: int = 7):
     """Marque 'gone' uniquement les annonces absentes depuis plus de days_threshold jours."""
     cutoff = (datetime.utcnow() - timedelta(days=days_threshold)).isoformat()

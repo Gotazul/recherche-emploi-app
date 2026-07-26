@@ -98,6 +98,26 @@ class IndeedScraper(BaseScraper):
 
         return params
 
+    def verify_alive(self, url: str) -> bool | None:
+        from curl_cffi import requests as cffi_requests
+        cookies = _read_browser_cookies()
+        if not cookies.get("cf_clearance"):
+            return None
+        try:
+            resp = cffi_requests.get(url, cookies=cookies, impersonate="chrome", timeout=10)
+            if resp.status_code == 404:
+                return False
+            gone_markers = [
+                "cette offre n'est plus disponible",
+                "job is no longer available",
+                "offre expirée",
+                "cette annonce a expiré",
+            ]
+            body = resp.text.lower()
+            return not any(m in body for m in gone_markers)
+        except Exception:
+            return None
+
     def fetch_listings(self, criteria: dict) -> list[dict]:
         from curl_cffi import requests as cffi_requests
 

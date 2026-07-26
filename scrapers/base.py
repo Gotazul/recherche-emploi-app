@@ -50,6 +50,10 @@ class BaseScraper(ABC):
             "pub_date":      raw.get("pub_date", ""),
         }
 
+    def verify_alive(self, url: str) -> bool | None:
+        """Vérifie si l'annonce est toujours en ligne. Retourne None si non implémenté."""
+        return None
+
     def search(self, criteria: dict) -> dict:
         url = self.build_url(criteria)
         try:

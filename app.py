@@ -176,6 +176,16 @@ def run_search(profile_id: str, site_ids: list[str] = Query(default=[])):
                 site_updated += 1
 
         if seen_ids:
+            # Vérifie les annonces absentes de ce scrape via leur URL avant de les marquer gone
+            unseen = db.get_active_listings_not_in(profile_id, site["id"], seen_ids)
+            confirmed_gone = []
+            for row in unseen:
+                alive = scraper.verify_alive(row["url"])
+                if alive is False:
+                    confirmed_gone.append(row["external_id"])
+                # alive=True ou None → on laisse la logique des 7 jours décider
+            if confirmed_gone:
+                db.mark_gone_by_ids(profile_id, site["id"], confirmed_gone)
             db.mark_gone_if_not_seen(profile_id, site["id"], seen_ids)
 
         total_new += site_new
