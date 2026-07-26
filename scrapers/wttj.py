@@ -81,36 +81,54 @@ class WttjScraper(BaseScraper):
         keywords = criteria.get("keywords", [])
         query = " ".join(keywords) if keywords else ""
 
-        filters = 'website.reference:wttj_fr'
+        # Détecte si le profil cible des postes juniors/débutants
+        junior_keywords = {"junior", "débutant", "debutant", "entry", "entrée", "entree"}
+        is_junior = any(k.lower() in junior_keywords for k in keywords)
 
+        # optionalWords : les termes de niveau d'expérience boostent sans bloquer
+        optional = [w for w in keywords if w.lower() in junior_keywords | {
+            "senior", "confirmé", "confirme", "intermédiaire", "intermediaire",
+            "expérimenté", "experimente",
+        }]
+
+        seen_ids: set[str] = set()
         results = []
-        for page in range(4):  # 4 pages × 30 = 120 offres max
-            # optionalWords rend les mots de niveau ("junior", "senior"...)
-            # optionnels : Algolia n'exige pas tous les mots de la query
-            optional = [w for w in (keywords or []) if w.lower() in (
-                "junior", "senior", "confirmé", "confirme", "débutant", "debutant",
-                "intermédiaire", "intermediaire", "expérimenté", "experimente",
-            )]
-            payload = {
-                "query": query,
-                "hitsPerPage": 30,
-                "page": page,
-                "filters": filters,
-            }
-            if optional:
-                payload["optionalWords"] = optional
 
-            resp = requests.post(algolia_url, headers=hdrs, json=payload, timeout=15)
-            if resp.status_code != 200:
-                raise Exception(f"HTTP {resp.status_code} — Algolia WTTJ a refusé la requête")
+        # Si recherche junior : deux passes — exp<=2 ans ET non renseigné
+        filter_sets = (
+            [
+                "website.reference:wttj_fr AND experience_level_minimum <= 2",
+                "website.reference:wttj_fr AND has_experience_level_minimum:false",
+            ]
+            if is_junior
+            else ["website.reference:wttj_fr"]
+        )
 
-            data = resp.json()
-            hits = data.get("hits", [])
-            results.extend(self._parse_hit(h) for h in hits)
+        for filters in filter_sets:
+            for page in range(3):  # 3 pages × 30 = 90 par filtre
+                payload = {
+                    "query": query,
+                    "hitsPerPage": 30,
+                    "page": page,
+                    "filters": filters,
+                }
+                if optional:
+                    payload["optionalWords"] = optional
 
-            nb_pages = data.get("nbPages", 1)
-            if page + 1 >= nb_pages:
-                break
+                resp = requests.post(algolia_url, headers=hdrs, json=payload, timeout=15)
+                if resp.status_code != 200:
+                    raise Exception(f"HTTP {resp.status_code} — Algolia WTTJ a refusé la requête")
+
+                data = resp.json()
+                for h in data.get("hits", []):
+                    oid = str(h.get("objectID", ""))
+                    if oid not in seen_ids:
+                        seen_ids.add(oid)
+                        results.append(self._parse_hit(h))
+
+                nb_pages = data.get("nbPages", 1)
+                if page + 1 >= nb_pages:
+                    break
 
         return results
 
