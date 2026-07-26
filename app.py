@@ -1,15 +1,19 @@
 import csv
 import io
+import os
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key, dotenv_values
 load_dotenv()
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+_ENV_PATH = Path(__file__).parent / ".env"
 
 import database as db
 from filters import matches_criteria
@@ -117,6 +121,37 @@ def update_site(site_id: str, body: SiteIn):
     if not s:
         raise HTTPException(404, "Site introuvable")
     return s
+
+
+class CredentialsIn(BaseModel):
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+
+
+@app.get("/api/sites/{site_id}/credentials")
+def get_site_credentials(site_id: str):
+    s = db.get_site(site_id)
+    if not s:
+        raise HTTPException(404, "Site introuvable")
+    env = dotenv_values(_ENV_PATH)
+    return {
+        "client_id":     env.get("FRANCE_TRAVAIL_CLIENT_ID", ""),
+        "has_secret":    bool(env.get("FRANCE_TRAVAIL_CLIENT_SECRET", "")),
+    }
+
+
+@app.post("/api/sites/{site_id}/credentials")
+def save_site_credentials(site_id: str, body: CredentialsIn):
+    s = db.get_site(site_id)
+    if not s:
+        raise HTTPException(404, "Site introuvable")
+    if body.client_id is not None and body.client_id.strip():
+        set_key(str(_ENV_PATH), "FRANCE_TRAVAIL_CLIENT_ID", body.client_id.strip())
+        os.environ["FRANCE_TRAVAIL_CLIENT_ID"] = body.client_id.strip()
+    if body.client_secret is not None and body.client_secret.strip():
+        set_key(str(_ENV_PATH), "FRANCE_TRAVAIL_CLIENT_SECRET", body.client_secret.strip())
+        os.environ["FRANCE_TRAVAIL_CLIENT_SECRET"] = body.client_secret.strip()
+    return {"ok": True}
 
 
 @app.delete("/api/sites/{site_id}")

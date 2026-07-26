@@ -50,6 +50,18 @@ class BaseScraper(ABC):
             "pub_date":      raw.get("pub_date", ""),
         }
 
+    @staticmethod
+    def _effective_keywords(criteria: dict) -> list[str]:
+        """Retourne les mots-clés enrichis de 'junior' si experience_levels le demande."""
+        keywords = list(criteria.get("keywords") or [])
+        exp_levels = criteria.get("experience_levels") or []
+        junior_levels = {"junior", "débutant", "debutant"}
+        if any(e.lower() in junior_levels for e in exp_levels):
+            kw_lower = {k.lower() for k in keywords}
+            if not (kw_lower & {"junior", "débutant", "debutant", "entry"}):
+                keywords.append("junior")
+        return keywords
+
     def verify_alive(self, url: str) -> bool | None:
         """Vérifie si l'annonce est toujours en ligne. Retourne None si non implémenté."""
         return None

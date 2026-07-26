@@ -26,6 +26,13 @@ _CONTRACT_MAP = {
     "stage":      "I",
 }
 
+# Mapping niveau d'expérience → codes LinkedIn f_E
+_EXPERIENCE_CODES = {
+    "débutant":      "1",
+    "junior":        "2",
+    "intermédiaire": "3",
+    "senior":        "4",
+}
 _JUNIOR_KW = {"junior", "débutant", "debutant", "entry", "entrée", "entree"}
 
 
@@ -45,9 +52,13 @@ class LinkedInScraper(BaseScraper):
             "geoId":    "105015875",  # France
         }
 
-        # Filtre expérience junior
-        is_junior = any(k.lower() in _JUNIOR_KW for k in keywords)
-        if is_junior:
+        # Filtre niveau d'expérience : champ dédié en priorité, sinon détection via mots-clés
+        exp_levels = criteria.get("experience_levels") or []
+        if exp_levels:
+            codes = [_EXPERIENCE_CODES[e] for e in exp_levels if e in _EXPERIENCE_CODES]
+            if codes:
+                params["f_E"] = ",".join(codes)
+        elif any(k.lower() in _JUNIOR_KW for k in keywords):
             params["f_E"] = _JUNIOR_EXP_FILTER
 
         # Filtre type de contrat (seulement si un seul type demandé)

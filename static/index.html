@@ -95,6 +95,12 @@
   <div id="view-listings" class="view">
     <div class="is-flex is-align-items-center is-justify-content-space-between mb-4">
       <h1 class="title is-4 mb-0">Offres <span class="tag is-light ml-2" id="listings-total">0</span></h1>
+      <div class="mx-4" style="flex:1;max-width:360px">
+        <div class="control has-icons-left">
+          <input class="input is-small" type="text" id="filter-text" placeholder="Filtrer par titre, entreprise, ville…">
+          <span class="icon is-small is-left"><i class="fas fa-search"></i></span>
+        </div>
+      </div>
       <div class="buttons">
         <button class="button is-info is-light" id="btn-compare">
           <span class="icon"><i class="fas fa-columns"></i></span>
@@ -266,6 +272,16 @@
           </div>
           <p class="help">Laisser tout décoché = tous les contrats acceptés.</p>
         </div>
+        <div class="field" style="grid-column: span 2">
+          <label class="label is-small">Niveau d'expérience</label>
+          <div class="is-flex" style="gap:1rem;flex-wrap:wrap">
+            <label class="checkbox"><input type="checkbox" class="pf-experience" value="débutant"> Débutant (0–1 an)</label>
+            <label class="checkbox"><input type="checkbox" class="pf-experience" value="junior"> Junior (1–3 ans)</label>
+            <label class="checkbox"><input type="checkbox" class="pf-experience" value="intermédiaire"> Intermédiaire (3–5 ans)</label>
+            <label class="checkbox"><input type="checkbox" class="pf-experience" value="senior"> Senior (5+ ans)</label>
+          </div>
+          <p class="help">Laisser tout décoché = tous niveaux acceptés.</p>
+        </div>
         <div class="field">
           <label class="label is-small">Localisation</label>
           <input class="input is-small" type="text" id="pf-location" placeholder="Besançon, Paris…">
@@ -320,6 +336,19 @@
             <option value="direct">Direct (scraping automatique)</option>
             <option value="manual">Manuel (import manuel)</option>
           </select>
+        </div>
+      </div>
+      <div id="sf-credentials-section" style="display:none">
+        <hr>
+        <p class="subtitle is-6 mb-3">Identifiants API France Travail</p>
+        <p class="help mb-3">Obtenus sur <strong>francetravail.io</strong> en créant une application avec l'API "Offres d'emploi v2".</p>
+        <div class="field">
+          <label class="label">Client ID</label>
+          <input class="input" type="text" id="sf-client-id" placeholder="ex : PAR_monapp_abc123...">
+        </div>
+        <div class="field">
+          <label class="label">Client Secret</label>
+          <input class="input" type="password" id="sf-client-secret" placeholder="Laisser vide pour ne pas modifier">
         </div>
       </div>
       <div class="buttons mt-3">

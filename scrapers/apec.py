@@ -62,7 +62,7 @@ class ApecScraper(BaseScraper):
             "secteursActivite": [],
             "pagination": {"startIndex": 0, "range": 50},
         }
-        keywords = criteria.get("keywords", [])
+        keywords = self._effective_keywords(criteria)
         if keywords:
             payload["motsCles"] = " ".join(keywords)
         return payload

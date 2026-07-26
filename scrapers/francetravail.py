@@ -58,7 +58,7 @@ class FranceTravailScraper(BaseScraper):
     def _build_params(self, criteria: dict) -> dict:
         params = {}
 
-        keywords = criteria.get("keywords", [])
+        keywords = self._effective_keywords(criteria)
         if keywords:
             params["motsCles"] = " ".join(keywords)
 

@@ -170,6 +170,17 @@ function renderListingsTable(items) {
       document.getElementById("compare-count").textContent = compareSet.size;
     });
   });
+
+  applyTextFilter();
+}
+
+function applyTextFilter() {
+  const q = (document.getElementById("filter-text")?.value || "").toLowerCase().trim();
+  document.querySelectorAll("#listings-tbody tr").forEach(tr => {
+    if (!q) { tr.style.display = ""; return; }
+    const text = tr.textContent.toLowerCase();
+    tr.style.display = text.includes(q) ? "" : "none";
+  });
 }
 
 function applyListingsFilters() {
@@ -461,6 +472,7 @@ function criteriaPreview(c) {
   if (typeof c === "string") c = JSON.parse(c);
   const parts = [];
   if (c.keywords?.length) parts.push(c.keywords.join(", "));
+  if (c.experience_levels?.length) parts.push(c.experience_levels.join(" / "));
   if (c.contract_types?.length) parts.push(c.contract_types.join(" / "));
   if (c.location) parts.push(c.location);
   if (c.radius_km) parts.push(`${c.radius_km} km`);
@@ -487,19 +499,24 @@ function fillProfileForm(p) {
   document.querySelectorAll(".pf-contract").forEach(cb => {
     cb.checked = (c.contract_types || []).includes(cb.value);
   });
+  document.querySelectorAll(".pf-experience").forEach(cb => {
+    cb.checked = (c.experience_levels || []).includes(cb.value);
+  });
 }
 
 function getProfileFormData() {
   const splitTrim = v => v.split(",").map(s => s.trim()).filter(Boolean);
-  const contracts = [...document.querySelectorAll(".pf-contract:checked")].map(cb => cb.value);
+  const contracts   = [...document.querySelectorAll(".pf-contract:checked")].map(cb => cb.value);
+  const experiences = [...document.querySelectorAll(".pf-experience:checked")].map(cb => cb.value);
   return {
     name: document.getElementById("pf-name").value.trim(),
     criteria: {
-      keywords:       splitTrim(document.getElementById("pf-keywords").value),
-      contract_types: contracts,
-      location:       document.getElementById("pf-location").value.trim(),
-      radius_km:      parseInt(document.getElementById("pf-radius").value) || null,
-      remote:         document.getElementById("pf-remote").value,
+      keywords:         splitTrim(document.getElementById("pf-keywords").value),
+      experience_levels: experiences,
+      contract_types:   contracts,
+      location:         document.getElementById("pf-location").value.trim(),
+      radius_km:        parseInt(document.getElementById("pf-radius").value) || null,
+      remote:           document.getElementById("pf-remote").value,
     }
   };
 }
@@ -568,6 +585,11 @@ async function toggleSite(id, currentActive) {
   renderSites();
 }
 
+function _toggleCredentialsSection(name) {
+  const show = name.toLowerCase().includes("france travail");
+  document.getElementById("sf-credentials-section").style.display = show ? "block" : "none";
+}
+
 async function editSite(id) {
   const s = await api.get(`/api/sites/${id}`);
   editingSiteId = id;
@@ -575,15 +597,28 @@ async function editSite(id) {
   document.getElementById("sf-url").value = s.url_base;
   document.getElementById("sf-mode").value = s.access_mode;
   document.getElementById("site-form-title").textContent = "Modifier le site";
+  _toggleCredentialsSection(s.name);
+  // Pré-remplit le Client ID si déjà configuré
+  document.getElementById("sf-client-id").value = "";
+  document.getElementById("sf-client-secret").value = "";
+  if (s.name.toLowerCase().includes("france travail")) {
+    const creds = await api.get(`/api/sites/${id}/credentials`).catch(() => null);
+    if (creds?.client_id) document.getElementById("sf-client-id").value = creds.client_id;
+  }
   document.getElementById("site-form-section").style.display = "block";
   document.getElementById("site-form-section").scrollIntoView({ behavior: "smooth" });
 }
+
+document.getElementById("sf-name").addEventListener("input", e => _toggleCredentialsSection(e.target.value));
 
 document.getElementById("btn-site-new").addEventListener("click", () => {
   editingSiteId = null;
   document.getElementById("sf-name").value = "";
   document.getElementById("sf-url").value = "https://";
   document.getElementById("sf-mode").value = "direct";
+  document.getElementById("sf-client-id").value = "";
+  document.getElementById("sf-client-secret").value = "";
+  document.getElementById("sf-credentials-section").style.display = "none";
   document.getElementById("site-form-title").textContent = "Nouveau site";
   document.getElementById("site-form-section").style.display = "block";
 });
@@ -595,13 +630,20 @@ document.getElementById("btn-site-save").addEventListener("click", async () => {
     access_mode: document.getElementById("sf-mode").value,
   };
   if (!data.name || !data.url_base) { toast("Nom et URL requis", "is-danger"); return; }
-  if (editingSiteId) {
-    await api.put(`/api/sites/${editingSiteId}`, data);
-    toast("Site mis à jour", "is-success");
+  let siteId = editingSiteId;
+  if (siteId) {
+    await api.put(`/api/sites/${siteId}`, data);
   } else {
-    await api.post("/api/sites", data);
-    toast("Site ajouté", "is-success");
+    const created = await api.post("/api/sites", data);
+    siteId = created.id;
   }
+  // Sauvegarde les credentials France Travail si renseignés
+  const clientId     = document.getElementById("sf-client-id").value.trim();
+  const clientSecret = document.getElementById("sf-client-secret").value.trim();
+  if (data.name.toLowerCase().includes("france travail") && (clientId || clientSecret)) {
+    await api.post(`/api/sites/${siteId}/credentials`, { client_id: clientId, client_secret: clientSecret });
+  }
+  toast(editingSiteId ? "Site mis à jour" : "Site ajouté", "is-success");
   document.getElementById("site-form-section").style.display = "none";
   editingSiteId = null;
   renderSites();
@@ -620,6 +662,8 @@ async function deleteSite(id) {
 }
 
 // ── Filtres listeners ─────────────────────────────────────────────────────────
+document.getElementById("filter-text")?.addEventListener("input", applyTextFilter);
+
 ["filter-profile","filter-site","filter-status","filter-contract","filter-remote"].forEach(id => {
   document.getElementById(id)?.addEventListener("change", applyListingsFilters);
 });

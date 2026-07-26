@@ -77,7 +77,7 @@ class IndeedScraper(BaseScraper):
 
     def _search_params(self, criteria: dict) -> dict:
         params = {}
-        keywords = criteria.get("keywords", [])
+        keywords = self._effective_keywords(criteria)
         if keywords:
             params["q"] = " ".join(keywords)
 

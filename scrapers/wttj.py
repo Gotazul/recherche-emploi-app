@@ -1,6 +1,7 @@
 import logging
 import re
 import requests
+from curl_cffi import requests as cffi_requests
 from urllib.parse import urlencode
 from .base import BaseScraper, HEADERS
 
@@ -39,7 +40,7 @@ def _get_algolia_config() -> tuple[str, str]:
     if _algolia_cache:
         return _algolia_cache["app_id"], _algolia_cache["api_key"]
     try:
-        r = requests.get(_ENV_URL, headers=HEADERS, timeout=10)
+        r = cffi_requests.get(_ENV_URL, impersonate="chrome", timeout=10)
         m = re.search(r'"PUBLIC_ALGOLIA_APPLICATION_ID":"([^"]+)"', r.text)
         k = re.search(r'"PUBLIC_ALGOLIA_API_KEY_CLIENT":"([^"]+)"', r.text)
         if m and k:
@@ -81,54 +82,54 @@ class WttjScraper(BaseScraper):
         keywords = criteria.get("keywords", [])
         query = " ".join(keywords) if keywords else ""
 
-        # Détecte si le profil cible des postes juniors/débutants
-        junior_keywords = {"junior", "débutant", "debutant", "entry", "entrée", "entree"}
-        is_junior = any(k.lower() in junior_keywords for k in keywords)
+        # Détermine si on filtre sur les postes juniors/débutants
+        # Priorité : champ experience_levels, sinon détection via mots-clés
+        _junior_levels = {"junior", "débutant", "debutant"}
+        _junior_kw     = {"junior", "débutant", "debutant", "entry", "entrée", "entree"}
+        exp_levels = criteria.get("experience_levels") or []
+        if exp_levels:
+            is_junior = any(e.lower() in _junior_levels for e in exp_levels)
+        else:
+            is_junior = any(k.lower() in _junior_kw for k in keywords)
 
         # optionalWords : les termes de niveau d'expérience boostent sans bloquer
-        optional = [w for w in keywords if w.lower() in junior_keywords | {
+        _exp_kw_all = _junior_kw | {
             "senior", "confirmé", "confirme", "intermédiaire", "intermediaire",
             "expérimenté", "experimente",
-        }]
+        }
+        optional = [w for w in keywords if w.lower() in _exp_kw_all]
 
         seen_ids: set[str] = set()
         results = []
 
-        # Si recherche junior : deux passes — exp<=2 ans ET non renseigné
-        filter_sets = (
-            [
-                "website.reference:wttj_fr AND experience_level_minimum <= 2",
-                "website.reference:wttj_fr AND has_experience_level_minimum:false",
-            ]
-            if is_junior
-            else ["website.reference:wttj_fr"]
-        )
+        # Filtre expérience : <= 3 (intermédiaire inclus) pour junior, sinon pas de filtre
+        base_filter = "website.reference:wttj_fr"
+        filters = f"{base_filter} AND experience_level_minimum <= 3" if is_junior else base_filter
 
-        for filters in filter_sets:
-            for page in range(3):  # 3 pages × 30 = 90 par filtre
-                payload = {
-                    "query": query,
-                    "hitsPerPage": 30,
-                    "page": page,
-                    "filters": filters,
-                }
-                if optional:
-                    payload["optionalWords"] = optional
+        for page in range(5):  # 5 pages × 30 = 150 offres max
+            payload = {
+                "query": query,
+                "hitsPerPage": 30,
+                "page": page,
+                "filters": filters,
+            }
+            if optional:
+                payload["optionalWords"] = optional
 
-                resp = requests.post(algolia_url, headers=hdrs, json=payload, timeout=15)
-                if resp.status_code != 200:
-                    raise Exception(f"HTTP {resp.status_code} — Algolia WTTJ a refusé la requête")
+            resp = cffi_requests.post(algolia_url, headers=hdrs, json=payload, impersonate="chrome", timeout=15)
+            if resp.status_code != 200:
+                raise Exception(f"HTTP {resp.status_code} — Algolia WTTJ a refusé la requête")
 
-                data = resp.json()
-                for h in data.get("hits", []):
-                    oid = str(h.get("objectID", ""))
-                    if oid not in seen_ids:
-                        seen_ids.add(oid)
-                        results.append(self._parse_hit(h))
+            data = resp.json()
+            for h in data.get("hits", []):
+                oid = str(h.get("objectID", ""))
+                if oid not in seen_ids:
+                    seen_ids.add(oid)
+                    results.append(self._parse_hit(h))
 
-                nb_pages = data.get("nbPages", 1)
-                if page + 1 >= nb_pages:
-                    break
+            nb_pages = data.get("nbPages", 1)
+            if page + 1 >= nb_pages:
+                break
 
         return results
 
