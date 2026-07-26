@@ -2,15 +2,16 @@ import logging
 import re
 import subprocess
 import time
-import xml.etree.ElementTree as ET
-import requests
+import json
+from datetime import datetime
 from urllib.parse import urlencode
 from .base import BaseScraper, HEADERS
 
 logger = logging.getLogger(__name__)
 
-_RSS_URL     = "https://fr.indeed.com/rss"
-_INDEED_HOME = "https://fr.indeed.com/"
+_BASE_URL    = "https://fr.indeed.com"
+_SEARCH_URL  = f"{_BASE_URL}/emplois"
+_INDEED_HOME = f"{_BASE_URL}/"
 
 _KM_TO_MILES = {25: 15, 50: 25, 75: 50, 100: 50, 150: 100}
 
@@ -24,37 +25,46 @@ _CONTRACT_CODE = {
 }
 
 
-def _open_chrome_for_cookie():
-    """Ouvre un onglet Chrome sur Indeed pour rafraîchir le cookie DataDome."""
+def _open_browser_for_cookie():
     for cmd in (
         ["google-chrome", "--new-tab", _INDEED_HOME],
         ["google-chrome-stable", "--new-tab", _INDEED_HOME],
         ["chromium-browser", "--new-tab", _INDEED_HOME],
+        ["firefox", "--new-tab", _INDEED_HOME],
         ["xdg-open", _INDEED_HOME],
     ):
         try:
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(5)
+            time.sleep(12)
             return
         except FileNotFoundError:
             continue
 
 
-def _read_chrome_cookies() -> dict:
-    try:
-        import rookiepy
-        cj = rookiepy.chrome([".indeed.com"])
-        return {c["name"]: c["value"] for c in cj}
-    except Exception as e:
-        logger.warning("rookiepy ne peut pas lire les cookies Chrome Indeed : %s", e)
-        return {}
+def _read_browser_cookies() -> dict:
+    import rookiepy
+    domain = [".indeed.com"]
+    for reader, name in (
+        (rookiepy.chrome,   "Chrome"),
+        (rookiepy.chromium, "Chromium"),
+        (rookiepy.firefox,  "Firefox"),
+    ):
+        try:
+            cj = reader(domain)
+            cookies = {c["name"]: c["value"] for c in cj}
+            if cookies.get("cf_clearance"):
+                logger.info("Cookies Cloudflare lus depuis %s", name)
+                return cookies
+        except Exception as e:
+            logger.debug("%s cookies: %s", name, e)
+    return {}
 
 
 class IndeedScraper(BaseScraper):
     site_name = "Indeed"
 
     def build_url(self, criteria: dict) -> str:
-        return "https://fr.indeed.com/emplois?" + urlencode(self._search_params(criteria))
+        return _SEARCH_URL + "?" + urlencode(self._search_params(criteria))
 
     def _search_params(self, criteria: dict) -> dict:
         params = {}
@@ -63,8 +73,7 @@ class IndeedScraper(BaseScraper):
             params["q"] = " ".join(keywords)
 
         location = (criteria.get("location") or "").strip()
-        if location:
-            params["l"] = location
+        params["l"] = location or "France"
 
         radius_km = criteria.get("radius_km")
         if radius_km:
@@ -81,89 +90,109 @@ class IndeedScraper(BaseScraper):
         return params
 
     def fetch_listings(self, criteria: dict) -> list[dict]:
-        _open_chrome_for_cookie()
-        cookies = _read_chrome_cookies()
+        from curl_cffi import requests as cffi_requests
 
-        if not cookies.get("datadome"):
+        _open_browser_for_cookie()
+        cookies = _read_browser_cookies()
+
+        if not cookies.get("cf_clearance"):
             raise Exception(
-                "Cookie DataDome absent — assure-toi que Chrome est installé "
-                "et que tu t'es connecté à fr.indeed.com au moins une fois."
+                "Cookie Cloudflare absent — visite fr.indeed.com dans Chrome ou Firefox "
+                "et relance la recherche (pas besoin de compte)."
             )
-
-        hdrs = {
-            **HEADERS,
-            "Referer": _INDEED_HOME,
-            "Accept": "application/rss+xml, application/xml, text/xml, */*",
-        }
-        rss_params = {**self._search_params(criteria), "lang": "fr"}
-        resp = requests.get(_RSS_URL, params=rss_params, headers=hdrs, cookies=cookies, timeout=15)
-
-        if resp.status_code == 403:
-            raise Exception(
-                "Indeed bloque la requête malgré le cookie Chrome. "
-                "Clique sur 'Ouvrir' pour consulter les offres manuellement."
-            )
-        if resp.status_code != 200:
-            raise Exception(f"HTTP {resp.status_code} — Indeed a refusé la requête")
-
-        return self._parse_rss(resp.text)
-
-    def _parse_rss(self, xml_text: str) -> list[dict]:
-        try:
-            root = ET.fromstring(xml_text)
-        except ET.ParseError as e:
-            raise Exception(f"Réponse RSS invalide (protection anti-bot probable) : {e}")
-
-        items = root.findall(".//item")
-        if not items:
-            return []
 
         results = []
-        for item in items:
+        params = self._search_params(criteria)
+
+        for page_start in (0, 15, 30):
+            params["start"] = page_start
             try:
-                results.append(self._parse_item(item))
+                resp = cffi_requests.get(
+                    _SEARCH_URL,
+                    params=params,
+                    cookies=cookies,
+                    impersonate="chrome",
+                    timeout=15,
+                )
+                if resp.status_code == 403:
+                    raise Exception(
+                        "Indeed bloque la requête. Visite fr.indeed.com dans ton navigateur "
+                        "et relance la recherche."
+                    )
+                if resp.status_code != 200:
+                    raise Exception(f"HTTP {resp.status_code} — Indeed a refusé la requête")
+
+                page_results = self._parse_html(resp.text)
+                results.extend(page_results)
+                if len(page_results) < 15:
+                    break
             except Exception:
-                continue
+                if page_start == 0:
+                    raise
+                break
+
         return results
 
-    def _parse_item(self, item) -> dict:
-        def text(tag):
-            el = item.find(tag)
-            return el.text.strip() if el is not None and el.text else ""
+    def _parse_html(self, html: str) -> list[dict]:
+        m = re.search(
+            r'window\.mosaic\.providerData\["mosaic-provider-jobcards"\]\s*=\s*(\{.*?\});\s*window\.mosaic',
+            html, re.S
+        )
+        if not m:
+            raise Exception("Impossible de parser les offres Indeed (structure HTML modifiée)")
 
-        title_raw = text("title")
-        url       = text("link")
-        desc_raw  = text("description")
-        pub_date  = text("pubDate")[:10] if text("pubDate") else ""
+        data = json.loads(m.group(1))
+        raw = (
+            data.get("metaData", {})
+                .get("mosaicProviderJobCardsModel", {})
+                .get("results", [])
+        )
+        listings = []
+        for item in raw:
+            try:
+                listings.append(self._parse_item(item))
+            except Exception:
+                continue
+        return listings
 
-        # Indeed RSS : "Titre - Entreprise - Ville" dans <title>
-        title, company, location = title_raw, "", ""
-        parts = [p.strip() for p in title_raw.split(" - ")]
-        if len(parts) >= 3:
-            title, company, location = parts[0], parts[1], parts[2]
-        elif len(parts) == 2:
-            title, company = parts[0], parts[1]
+    def _parse_item(self, item: dict) -> dict:
+        job_key = item.get("jobkey", "")
+        url = f"{_BASE_URL}/viewjob?jk={job_key}" if job_key else ""
 
-        ext_id_m = re.search(r"jk=([a-z0-9]+)", url)
-        ext_id = ext_id_m.group(1) if ext_id_m else url
+        salary_obj = item.get("salarySnippet") or {}
+        salary = salary_obj.get("text", "")
 
-        description = re.sub(r"<[^>]+>", " ", desc_raw).strip()
+        contract_types = item.get("jobTypes") or []
+        contract_type = ", ".join(contract_types) if contract_types else ""
+
+        # Timestamp ms → date YYYY-MM-DD
+        create_ts = item.get("createDate")
+        if create_ts:
+            pub_date = datetime.utcfromtimestamp(create_ts / 1000).strftime("%Y-%m-%d")
+        else:
+            pub_date = ""
+
+        snippet_html = item.get("snippet", "")
+        description = re.sub(r"<[^>]+>", " ", snippet_html).strip()
         description = re.sub(r"\s+", " ", description)[:500]
 
         remote = ""
         desc_lower = description.lower()
+        title_lower = (item.get("displayTitle") or "").lower()
         if "100% télétravail" in desc_lower or "full remote" in desc_lower:
             remote = "100% télétravail"
-        elif "télétravail" in desc_lower or "remote" in desc_lower:
+        elif "télétravail" in desc_lower or "remote" in desc_lower or "télétravail" in title_lower:
             remote = "Télétravail partiel"
 
         return self.normalize({
-            "external_id": ext_id,
-            "title":       title,
-            "company":     company,
-            "location":    location,
-            "remote":      remote,
-            "url":         url,
-            "description": description,
-            "pub_date":    pub_date,
+            "external_id":   job_key,
+            "title":         item.get("displayTitle", ""),
+            "company":       item.get("company", ""),
+            "contract_type": contract_type,
+            "location":      item.get("formattedLocation", ""),
+            "remote":        remote,
+            "salary":        salary,
+            "url":           url,
+            "description":   description,
+            "pub_date":      pub_date,
         })
