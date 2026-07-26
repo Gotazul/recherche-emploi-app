@@ -14,13 +14,13 @@ def _tokens(text: str) -> set[str]:
 def matches_criteria(listing: dict, criteria: dict) -> bool:
     """Post-scraping filter : mots-clés, contrat, télétravail."""
 
-    # Mots-clés : tous doivent apparaître dans le titre ou la description
+    # Mots-clés : au moins un doit apparaître dans le titre ou la description
     keywords = [_ascii_lower(k) for k in criteria.get("keywords", []) if k.strip()]
     if keywords:
         haystack = _tokens(
             (listing.get("title") or "") + " " + (listing.get("description") or "")
         )
-        if not all(any(tok.startswith(kw) for tok in haystack) for kw in keywords):
+        if not any(any(tok.startswith(kw) for tok in haystack) for kw in keywords):
             return False
 
     # Type de contrat

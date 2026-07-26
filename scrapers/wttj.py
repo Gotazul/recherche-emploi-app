@@ -85,12 +85,20 @@ class WttjScraper(BaseScraper):
 
         results = []
         for page in range(4):  # 4 pages × 30 = 120 offres max
+            # optionalWords rend les mots de niveau ("junior", "senior"...)
+            # optionnels : Algolia n'exige pas tous les mots de la query
+            optional = [w for w in (keywords or []) if w.lower() in (
+                "junior", "senior", "confirmé", "confirme", "débutant", "debutant",
+                "intermédiaire", "intermediaire", "expérimenté", "experimente",
+            )]
             payload = {
                 "query": query,
                 "hitsPerPage": 30,
                 "page": page,
                 "filters": filters,
             }
+            if optional:
+                payload["optionalWords"] = optional
 
             resp = requests.post(algolia_url, headers=hdrs, json=payload, timeout=15)
             if resp.status_code != 200:
