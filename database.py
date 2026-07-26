@@ -2,7 +2,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "emploi.db"
@@ -316,7 +316,9 @@ def get_listings_by_ids(ids: list[str]) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def mark_gone_if_not_seen(profile_id: str, site_id: str, seen_external_ids: list[str], since: str):
+def mark_gone_if_not_seen(profile_id: str, site_id: str, seen_external_ids: list[str], days_threshold: int = 7):
+    """Marque 'gone' uniquement les annonces absentes depuis plus de days_threshold jours."""
+    cutoff = (datetime.utcnow() - timedelta(days=days_threshold)).isoformat()
     with get_db() as conn:
         if seen_external_ids:
             placeholders = ",".join("?" * len(seen_external_ids))
@@ -324,13 +326,13 @@ def mark_gone_if_not_seen(profile_id: str, site_id: str, seen_external_ids: list
                 UPDATE listings SET status='gone'
                 WHERE profile_id=? AND site_id=? AND status NOT IN ('dismissed','interesting','applied')
                 AND last_detected < ? AND external_id NOT IN ({placeholders})
-            """, [profile_id, site_id, since] + seen_external_ids)
+            """, [profile_id, site_id, cutoff] + seen_external_ids)
         else:
             conn.execute("""
                 UPDATE listings SET status='gone'
                 WHERE profile_id=? AND site_id=? AND status NOT IN ('dismissed','interesting','applied')
                 AND last_detected < ?
-            """, [profile_id, site_id, since])
+            """, [profile_id, site_id, cutoff])
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────

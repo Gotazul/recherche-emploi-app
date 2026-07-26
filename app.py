@@ -159,7 +159,6 @@ def run_search(profile_id: str, site_ids: list[str] = Query(default=[])):
         result = scraper.search(criteria)
         site_new = 0
         site_updated = 0
-        search_since = datetime.utcnow().isoformat()
         seen_ids = []
 
         raw_count = len(result["listings"])
@@ -177,7 +176,7 @@ def run_search(profile_id: str, site_ids: list[str] = Query(default=[])):
                 site_updated += 1
 
         if seen_ids:
-            db.mark_gone_if_not_seen(profile_id, site["id"], seen_ids, search_since)
+            db.mark_gone_if_not_seen(profile_id, site["id"], seen_ids)
 
         total_new += site_new
         total_updated += site_updated
