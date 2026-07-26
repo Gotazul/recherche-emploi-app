@@ -115,7 +115,7 @@ class IndeedScraper(BaseScraper):
         results = []
         params = self._search_params(criteria)
 
-        for page_start in (0, 15, 30):
+        for page_start in (0, 15, 30, 45, 60):
             params["start"] = page_start
             try:
                 resp = cffi_requests.get(
