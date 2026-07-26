@@ -123,6 +123,39 @@ def update_site(site_id: str, body: SiteIn):
     return s
 
 
+class AgentImportIn(BaseModel):
+    profile_id: str
+    site_id: str
+    listings: list[dict]
+
+
+@app.post("/api/agent/import")
+def agent_import(body: AgentImportIn):
+    """Reçoit des offres scrappées par un agent local (ex: Indeed depuis un PC)."""
+    profile = db.get_profile(body.profile_id)
+    if not profile:
+        raise HTTPException(404, "Profil introuvable")
+    site = db.get_site(body.site_id)
+    if not site:
+        raise HTTPException(404, "Site introuvable")
+
+    new_count = updated_count = 0
+    seen_ids = []
+    for raw in body.listings:
+        raw["profile_id"] = body.profile_id
+        raw["site_id"]    = body.site_id
+        listing, is_new = db.upsert_listing(raw)
+        if listing.get("external_id"):
+            seen_ids.append(listing["external_id"])
+        if is_new:
+            new_count += 1
+        else:
+            updated_count += 1
+
+    db.mark_gone_if_not_seen(body.profile_id, body.site_id, seen_ids)
+    return {"new": new_count, "updated": updated_count}
+
+
 class CredentialsIn(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
