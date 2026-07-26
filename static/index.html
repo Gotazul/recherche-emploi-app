@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recherche Emploi</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="navbar app-nav is-white" role="navigation">
+  <div class="container">
+    <div class="navbar-brand">
+      <span class="navbar-item">💼 Recherche Emploi</span>
+    </div>
+    <div class="navbar-menu is-active">
+      <div class="navbar-start">
+        <a class="navbar-item nav-item" data-view="dashboard">
+          <span class="icon"><i class="fas fa-tachometer-alt"></i></span><span>Tableau de bord</span>
+        </a>
+        <a class="navbar-item nav-item" data-view="listings">
+          <span class="icon"><i class="fas fa-list"></i></span><span>Offres</span>
+        </a>
+        <a class="navbar-item nav-item" data-view="search">
+          <span class="icon"><i class="fas fa-search"></i></span><span>Rechercher</span>
+        </a>
+        <a class="navbar-item nav-item" data-view="compare">
+          <span class="icon"><i class="fas fa-columns"></i></span><span>Comparer</span>
+        </a>
+        <a class="navbar-item nav-item" data-view="profiles">
+          <span class="icon"><i class="fas fa-user-cog"></i></span><span>Profils</span>
+        </a>
+        <a class="navbar-item nav-item" data-view="sites">
+          <span class="icon"><i class="fas fa-globe"></i></span><span>Sites</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4 px-3">
+
+  <!-- ── Dashboard ──────────────────────────────────────────────────────────── -->
+  <div id="view-dashboard" class="view">
+    <h1 class="title is-4 mb-4">Tableau de bord</h1>
+
+    <div class="columns is-multiline mb-4">
+      <div class="column is-3">
+        <div class="box stat-card">
+          <div class="stat-value has-text-dark" id="dash-total">—</div>
+          <div class="stat-label">Offres total</div>
+        </div>
+      </div>
+      <div class="column is-3">
+        <div class="box stat-card">
+          <div class="stat-value has-text-link" id="dash-new">—</div>
+          <div class="stat-label">Nouvelles</div>
+        </div>
+      </div>
+      <div class="column is-3">
+        <div class="box stat-card">
+          <div class="stat-value has-text-success" id="dash-interesting">—</div>
+          <div class="stat-label">Intéressantes</div>
+        </div>
+      </div>
+      <div class="column is-3">
+        <div class="box stat-card">
+          <div class="stat-value has-text-warning" id="dash-applied">—</div>
+          <div class="stat-label">Candidatures</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns">
+      <div class="column is-8">
+        <h2 class="subtitle is-5 mb-3">Nouvelles offres récentes</h2>
+        <div id="dash-recent"></div>
+      </div>
+      <div class="column is-4">
+        <h2 class="subtitle is-5 mb-3">Par site</h2>
+        <table class="table is-narrow is-fullwidth">
+          <tbody id="dash-by-site"></tbody>
+        </table>
+        <hr>
+        <h2 class="subtitle is-5 mb-3">Lancer une recherche</h2>
+        <div id="dash-profiles"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Offres ────────────────────────────────────────────────────────────── -->
+  <div id="view-listings" class="view">
+    <div class="is-flex is-align-items-center is-justify-content-space-between mb-4">
+      <h1 class="title is-4 mb-0">Offres <span class="tag is-light ml-2" id="listings-total">0</span></h1>
+      <div class="buttons">
+        <button class="button is-info is-light" id="btn-compare">
+          <span class="icon"><i class="fas fa-columns"></i></span>
+          <span>Comparer (<span id="compare-count">0</span>)</span>
+        </button>
+        <button class="button is-light" id="btn-export">
+          <span class="icon"><i class="fas fa-file-csv"></i></span><span>Export CSV</span>
+        </button>
+        <button class="button is-danger is-light" id="btn-clear-listings">
+          <span class="icon"><i class="fas fa-trash"></i></span><span>Vider la liste</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="box mb-4">
+      <div class="columns is-multiline">
+        <div class="column is-3">
+          <label class="label is-small">Profil</label>
+          <div class="select is-small is-fullwidth">
+            <select id="filter-profile"></select>
+          </div>
+        </div>
+        <div class="column is-2">
+          <label class="label is-small">Site</label>
+          <div class="select is-small is-fullwidth">
+            <select id="filter-site"></select>
+          </div>
+        </div>
+        <div class="column is-2">
+          <label class="label is-small">Statut</label>
+          <div class="select is-small is-fullwidth">
+            <select id="filter-status">
+              <option value="">Tous</option>
+              <option value="new">Nouvelle</option>
+              <option value="viewed">Vue</option>
+              <option value="interesting">Intéressante</option>
+              <option value="applied">Candidatée</option>
+              <option value="dismissed">Écartée</option>
+              <option value="gone">Disparue</option>
+            </select>
+          </div>
+        </div>
+        <div class="column is-2">
+          <label class="label is-small">Contrat</label>
+          <div class="select is-small is-fullwidth">
+            <select id="filter-contract">
+              <option value="">Tous</option>
+              <option value="CDI">CDI</option>
+              <option value="CDD">CDD</option>
+              <option value="Intérim">Intérim</option>
+              <option value="Freelance">Freelance</option>
+              <option value="Alternance">Alternance</option>
+              <option value="Stage">Stage</option>
+            </select>
+          </div>
+        </div>
+        <div class="column is-2">
+          <label class="label is-small">Télétravail</label>
+          <div class="select is-small is-fullwidth">
+            <select id="filter-remote">
+              <option value="">Tous</option>
+              <option value="full">100% remote</option>
+              <option value="partial">Partiel</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="table is-fullwidth is-hoverable is-narrow">
+        <thead>
+          <tr>
+            <th style="width:30px"></th>
+            <th>Titre / Site</th>
+            <th>Entreprise</th>
+            <th>Contrat</th>
+            <th>Localisation</th>
+            <th>Télétravail</th>
+            <th>Salaire</th>
+            <th>Statut</th>
+            <th style="width:100px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="listings-tbody">
+          <tr><td colspan="9" class="has-text-centered has-text-grey py-5">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Rechercher ─────────────────────────────────────────────────────────── -->
+  <div id="view-search" class="view">
+    <h1 class="title is-4 mb-4">Lancer une recherche</h1>
+    <div class="box">
+      <div class="field is-horizontal">
+        <div class="field-label is-normal"><label class="label">Profil</label></div>
+        <div class="field-body">
+          <div class="field">
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select id="search-profile-sel"></select>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <div class="control">
+              <button class="button is-link" id="btn-search-launch">
+                <span class="icon"><i class="fas fa-search"></i></span>
+                <span>Rechercher maintenant</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="help mt-2">La recherche est lancée sur tous les sites actifs. Les nouvelles offres sont automatiquement ajoutées au suivi.</p>
+    </div>
+
+    <div id="search-results"></div>
+  </div>
+
+  <!-- ── Comparer ───────────────────────────────────────────────────────────── -->
+  <div id="view-compare" class="view">
+    <div class="is-flex is-align-items-center is-justify-content-space-between mb-4">
+      <h1 class="title is-4 mb-0">Comparateur</h1>
+      <button class="button is-danger is-light is-small" onclick="compareSet.clear();renderCompare()">
+        <span class="icon"><i class="fas fa-times"></i></span><span>Vider</span>
+      </button>
+    </div>
+    <div id="compare-grid" class="compare-grid"></div>
+  </div>
+
+  <!-- ── Profils ────────────────────────────────────────────────────────────── -->
+  <div id="view-profiles" class="view">
+    <div class="is-flex is-align-items-center is-justify-content-space-between mb-4">
+      <h1 class="title is-4 mb-0">Profils de recherche</h1>
+      <button class="button is-link" id="btn-profile-new">
+        <span class="icon"><i class="fas fa-plus"></i></span><span>Nouveau profil</span>
+      </button>
+    </div>
+
+    <div id="profiles-list"></div>
+
+    <!-- Formulaire profil -->
+    <div id="profile-form-section" class="box mt-4" style="display:none">
+      <h2 class="subtitle is-5 mb-3" id="profile-form-title">Nouveau profil</h2>
+      <div class="field">
+        <label class="label">Nom du profil</label>
+        <div class="control">
+          <input class="input" type="text" id="pf-name" placeholder="Ex : Ingénieur embarqué junior">
+        </div>
+      </div>
+      <div class="criteria-grid mt-3">
+        <div class="field" style="grid-column: span 2">
+          <label class="label is-small">Mots-clés <span class="has-text-grey">(séparés par virgule)</span></label>
+          <input class="input is-small" type="text" id="pf-keywords" placeholder="embarqué, firmware, C, RTOS, électronique">
+          <p class="help">Tous les mots-clés doivent apparaître dans l'offre.</p>
+        </div>
+        <div class="field" style="grid-column: span 2">
+          <label class="label is-small">Types de contrat</label>
+          <div class="is-flex" style="gap:1rem;flex-wrap:wrap">
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="CDI"> CDI</label>
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="CDD"> CDD</label>
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="Intérim"> Intérim</label>
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="Freelance"> Freelance / Prestataire</label>
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="Alternance"> Alternance</label>
+            <label class="checkbox"><input type="checkbox" class="pf-contract" value="Stage"> Stage</label>
+          </div>
+          <p class="help">Laisser tout décoché = tous les contrats acceptés.</p>
+        </div>
+        <div class="field">
+          <label class="label is-small">Localisation</label>
+          <input class="input is-small" type="text" id="pf-location" placeholder="Besançon, Paris…">
+        </div>
+        <div class="field">
+          <label class="label is-small">Rayon (km)</label>
+          <input class="input is-small" type="number" id="pf-radius" placeholder="50">
+        </div>
+        <div class="field">
+          <label class="label is-small">Télétravail</label>
+          <div class="select is-small is-fullwidth">
+            <select id="pf-remote">
+              <option value="indifferent">Indifférent</option>
+              <option value="partial">Partiel accepté</option>
+              <option value="full">100% remote uniquement</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="buttons mt-4">
+        <button class="button is-link" id="btn-profile-save">Enregistrer</button>
+        <button class="button is-light" id="btn-profile-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sites ──────────────────────────────────────────────────────────────── -->
+  <div id="view-sites" class="view">
+    <div class="is-flex is-align-items-center is-justify-content-space-between mb-4">
+      <h1 class="title is-4 mb-0">Sites sources</h1>
+      <button class="button is-link" id="btn-site-new">
+        <span class="icon"><i class="fas fa-plus"></i></span><span>Ajouter un site</span>
+      </button>
+    </div>
+    <div id="sites-list"></div>
+
+    <!-- Formulaire site -->
+    <div id="site-form-section" class="box mt-4" style="display:none">
+      <h2 class="subtitle is-5 mb-3" id="site-form-title">Nouveau site</h2>
+      <div class="field">
+        <label class="label">Nom</label>
+        <input class="input" type="text" id="sf-name" placeholder="Nom du site">
+      </div>
+      <div class="field">
+        <label class="label">URL de base</label>
+        <input class="input" type="url" id="sf-url" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label class="label">Mode d'accès</label>
+        <div class="select is-fullwidth">
+          <select id="sf-mode">
+            <option value="direct">Direct (scraping automatique)</option>
+            <option value="manual">Manuel (import manuel)</option>
+          </select>
+        </div>
+      </div>
+      <div class="buttons mt-3">
+        <button class="button is-link" id="btn-site-save">Enregistrer</button>
+        <button class="button is-light" id="btn-site-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<!-- Modal détail offre -->
+<div id="modal-listing" class="modal">
+  <div class="modal-background"></div>
+  <div class="modal-card" style="max-width:700px;width:95vw">
+    <header class="modal-card-head">
+      <p class="modal-card-title"></p>
+      <button class="modal-close is-large" aria-label="close"></button>
+    </header>
+    <section class="modal-card-body">
+      <div class="columns">
+        <div class="column is-7">
+          <div id="detail-info"></div>
+        </div>
+        <div class="column is-5">
+          <div class="field mb-3">
+            <label class="label is-small">Statut</label>
+            <div class="select is-small is-fullwidth">
+              <select id="detail-status">
+                <option value="new">Nouvelle</option>
+                <option value="viewed">Vue</option>
+                <option value="interesting">Intéressante</option>
+                <option value="applied">Candidatée</option>
+                <option value="dismissed">Écartée</option>
+                <option value="gone">Disparue</option>
+              </select>
+            </div>
+          </div>
+          <div class="field mb-3">
+            <label class="label is-small">Notes personnelles</label>
+            <textarea class="textarea is-small" id="detail-notes" rows="5" placeholder="Tes remarques, contacts, date d'envoi…"></textarea>
+            <button class="button is-small is-link mt-2" id="detail-save-notes">Enregistrer les notes</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
