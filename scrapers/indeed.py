@@ -25,7 +25,8 @@ _CONTRACT_CODE = {
 }
 
 
-def _open_browser_for_cookie():
+def _open_browser_and_close(wait: int = 10):
+    """Ouvre Indeed dans un nouvel onglet, attend le chargement, ferme l'onglet."""
     for cmd in (
         ["google-chrome", "--new-tab", _INDEED_HOME],
         ["google-chrome-stable", "--new-tab", _INDEED_HOME],
@@ -35,7 +36,15 @@ def _open_browser_for_cookie():
     ):
         try:
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(12)
+            time.sleep(wait)
+            # Ferme l'onglet actif via xdotool si disponible
+            try:
+                subprocess.run(
+                    ["xdotool", "key", "--clearmodifiers", "ctrl+w"],
+                    timeout=2, capture_output=True
+                )
+            except Exception:
+                pass
             return
         except FileNotFoundError:
             continue
@@ -92,14 +101,16 @@ class IndeedScraper(BaseScraper):
     def fetch_listings(self, criteria: dict) -> list[dict]:
         from curl_cffi import requests as cffi_requests
 
-        _open_browser_for_cookie()
+        # Utilise les cookies existants ; n'ouvre le navigateur que si absent ou expiré
         cookies = _read_browser_cookies()
-
         if not cookies.get("cf_clearance"):
-            raise Exception(
-                "Cookie Cloudflare absent — visite fr.indeed.com dans Chrome ou Firefox "
-                "et relance la recherche (pas besoin de compte)."
-            )
+            _open_browser_and_close(wait=10)
+            cookies = _read_browser_cookies()
+            if not cookies.get("cf_clearance"):
+                raise Exception(
+                    "Cookie Cloudflare absent — visite fr.indeed.com dans Chrome ou Firefox "
+                    "et relance la recherche (pas besoin de compte)."
+                )
 
         results = []
         params = self._search_params(criteria)
@@ -115,10 +126,18 @@ class IndeedScraper(BaseScraper):
                     timeout=15,
                 )
                 if resp.status_code == 403:
-                    raise Exception(
-                        "Indeed bloque la requête. Visite fr.indeed.com dans ton navigateur "
-                        "et relance la recherche."
+                    # Cookie expiré → rafraîchit et réessaie une fois
+                    _open_browser_and_close(wait=10)
+                    cookies = _read_browser_cookies()
+                    resp = cffi_requests.get(
+                        _SEARCH_URL, params=params, cookies=cookies,
+                        impersonate="chrome", timeout=15,
                     )
+                    if resp.status_code == 403:
+                        raise Exception(
+                            "Indeed bloque la requête même après rafraîchissement. "
+                            "Visite fr.indeed.com manuellement et relance."
+                        )
                 if resp.status_code != 200:
                     raise Exception(f"HTTP {resp.status_code} — Indeed a refusé la requête")
 
