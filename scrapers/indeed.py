@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL         = "https://fr.indeed.com"
 _SEARCH_URL       = f"{_BASE_URL}/emplois"
 _INDEED_HOME      = f"{_BASE_URL}/"
-_FLARESOLVERR_URL = "http://localhost:8191/v1"
+_FLARESOLVERR_URL = __import__("os").getenv("FLARESOLVERR_URL", "http://localhost:8191/v1")
 
 _KM_TO_MILES = {25: 15, 50: 25, 75: 50, 100: 50, 150: 100}
 

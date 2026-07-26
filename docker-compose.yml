@@ -1,0 +1,19 @@
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: always
+    environment:
+      - LOG_LEVEL=warning
+
+  app:
+    build: .
+    restart: always
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./emploi.db:/app/emploi.db
+      - ./.env:/app/.env
+    environment:
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+    depends_on:
+      - flaresolverr
